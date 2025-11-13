@@ -1,4 +1,5 @@
-﻿namespace App_library_back_end.Model
+﻿
+namespace App_library_back_end.Model
 {
     public class User
     {
