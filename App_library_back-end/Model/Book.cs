@@ -2,14 +2,15 @@
 {
     public class Book
     {
-        public int BookID {  get; set; }
-         public string Title { get; set; }
-         public string Author { get; set; }
-         public string Description { get; set; }
-         public string  Category { get; set; }
-         public string Publisher { get; set; }
-         public int PublishYear { get; set; }
-        public string Type { get; set; }
+        public int BookID { get; set; }
+        public String Title { get; set; }
+        public String Author { get; set; }
+        public String Description { get; set; }
+        public String Category { get; set; }
+        public String Publisher { get; set; }
+        public int publishYear { get; set; }
+
+
 
     }
 }
