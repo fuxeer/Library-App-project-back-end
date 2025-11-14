@@ -1,6 +1,9 @@
 ﻿using App_library_back_end.Model;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
 
 namespace App_library_back_end.Controllers
 {
@@ -8,23 +11,278 @@ namespace App_library_back_end.Controllers
     [ApiController]
     public class UsersController : ControllerBase
     {
-        // Hardcoded test user
-        private readonly User Faisal = new User()
+        private string HashPassword(string password)
         {
-            UserName = "Faisal",
-            Password = "Password",
-            Name = "Fasal",
-            Type = "Borrower"
-        };
-
-        // GET /api/users
-        [HttpGet]
-        public IActionResult GetUser()
-        {
-            return Ok(Faisal); // Return the full user object as JSON
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(password);
+            var hash = sha.ComputeHash(bytes);
+            return Convert.ToBase64String(hash);
         }
 
-        
-        
+        private readonly string _connectionString;
+
+        public UsersController(IConfiguration configuration)
+        {
+            _connectionString = configuration.GetConnectionString("DefaultConnection");
+            InitializeDatabase();
+        }
+
+        private void InitializeDatabase()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS user (
+                    UserID INT PRIMARY KEY AUTOINCREMENT,
+	                Name VARCHAR NOT NULL,
+	                UserName VARCHAR NOT NULL UNIQUE,
+	                Password VARCHAR NOT NULL,
+	                Email VARCHAR,
+	                DateOfBirth DATE,
+	                Gender VARCHAR,
+	                PhoneNo VARCHAR,
+	                Address VARCHAR,
+	                UserType CHAR
+                );";
+            command.ExecuteNonQuery();
+        }
+
+        [HttpGet]
+        public ActionResult<IEnumerable<User>> GetAllUsers()
+        {
+            var users = new List<User>();
+
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT UserID, Name, UserName, Password, Email, DateOfBirth, Gender, PhoneNo, Address, UserType
+                FROM user;
+            ";
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                users.Add(new User
+                {
+                    UserID = reader.GetInt32(0),
+                    Name = reader.GetString(1),
+                    UserName = reader.GetString(2),
+                    Password = reader.GetString(3),
+                    Email = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    DateOfBirth = reader.IsDBNull(5)
+                        ? default
+                        : DateOnly.FromDateTime(DateTime.Parse(reader.GetString(5))),
+                    Gender = reader.GetString(6),
+                    PhoneNo = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    Address = reader.IsDBNull(8) ? null : reader.GetString(8),
+                    UserType = reader.IsDBNull(9) ? null : reader.GetString(9)
+                });
+            }
+
+            foreach (var u in users)
+                u.Password = null;
+
+            return Ok(users);
+        }
+
+        [HttpGet("{id}")]
+        public ActionResult<User> GetUserById(int id)
+        {
+            User user = null;
+
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT UserID, Name, UserName, Password, Email, DateOfBirth, Gender, PhoneNo, Address, UserType
+                FROM User
+                WHERE UserID = $id;
+            ";
+
+            command.Parameters.AddWithValue("$id", id);
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                user = new User
+                {
+                    UserID = reader.GetInt32(0),
+                    Name = reader.GetString(1),
+                    Password = reader.IsDBNull(2) ? null : reader.GetString(2),
+                    DateOfBirth = reader.IsDBNull(3)
+                        ? default
+                        : DateOnly.FromDateTime(DateTime.Parse(reader.GetString(3))),
+                    Email = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    PhoneNo = reader.IsDBNull(5) ? null : reader.GetString(5),
+                    Address = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    UserType = reader.IsDBNull(7) ? null : reader.GetString(7)
+                };
+            }
+
+            if (user == null)
+                return NotFound($"No user found with ID = {id}");
+
+            return Ok(user);
+        }
+
+        [HttpPost]
+        public ActionResult<User> CreateUser(User newUser)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // نكتب أمر SQL لإضافة مستخدم
+            // ثم نطلب آخر ID تم إدخاله (SQLite يوفّره تلقائيًا)
+            command.CommandText = @"
+                INSERT INTO User (Name, UserName, Password, Email, DateOfBirth, Gender, PhoneNo, Address, UserType)
+                VALUES ($name, $UserName, $password, $email, $dob, $gender, $phone, $address, $userType);
+
+                SELECT last_insert_rowid();
+            ";
+
+            command.Parameters.AddWithValue("$name", newUser.Name);
+
+            string hashedPassword = HashPassword(newUser.Password);
+            command.Parameters.AddWithValue("$password", hashedPassword);
+
+            command.Parameters.AddWithValue(
+                "$dob",
+                newUser.DateOfBirth == default
+                    ? (object)DBNull.Value
+                    : newUser.DateOfBirth
+                          .ToDateTime(TimeOnly.MinValue)
+                          .ToString("yyyy-MM-dd")
+            );
+
+            command.Parameters.AddWithValue("$email",
+                string.IsNullOrWhiteSpace(newUser.Email) ? (object)DBNull.Value : newUser.Email);
+
+            command.Parameters.AddWithValue("$phone",
+                string.IsNullOrWhiteSpace(newUser.PhoneNo) ? (object)DBNull.Value : newUser.PhoneNo);
+
+            command.Parameters.AddWithValue("$address",
+                string.IsNullOrWhiteSpace(newUser.Address) ? (object)DBNull.Value : newUser.Address);
+
+            command.Parameters.AddWithValue("$userType",
+                string.IsNullOrWhiteSpace(newUser.UserType) ? (object)DBNull.Value : newUser.UserType);
+
+            long inserted = (long)command.ExecuteScalar();
+            newUser.UserID = (int)inserted;
+
+            return CreatedAtAction(nameof(GetAllUsers), new { id = newUser.UserID }, newUser);
+        }
+
+        [HttpPut("{id}")]
+        public ActionResult UdateUser(int id, User UpdatedUser)
+        {
+            // نتأكد أن الجدول موجود (لو موجود ما راح يسوي شيء)
+            InitializeDatabase();
+
+            //فتح اتصال بالداتا بيس
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            //نتاكد انه موجود عشان نحدثه
+            var CheckCommand = connection.CreateCommand();
+            CheckCommand.CommandText = "SELECT COUNT(*) FROM User WHERE UserID = $id;";
+            CheckCommand.Parameters.AddWithValue("$id", id);
+
+            long count = (long)CheckCommand.ExecuteScalar();
+            if (count == 0)
+                return NotFound($"No user found with ID={id}");
+
+            //ننشئ امر التحديث
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                UPDATE User
+                SET
+                    Name        = $name,
+                    UserName    = $UserName,
+                    Password    = $password,
+                    Email       = $email,
+                    DateOfBirth = $dob,
+                    Gender      = $gender,
+                    PhoneNo     = $phone,
+                    Address     = $address,
+                    UserType    = $userType
+                WHERE UserID = $id;
+            ";
+
+            command.Parameters.AddWithValue("$id", id);
+            command.Parameters.AddWithValue("$name", UpdatedUser.Name);
+
+            if (string.IsNullOrWhiteSpace(UpdatedUser.Password))
+            {
+                command.Parameters.AddWithValue("$password", DBNull.Value);
+            }
+            else
+            {
+                string hashedPassword = HashPassword(UpdatedUser.Password);
+                command.Parameters.AddWithValue("$password", hashedPassword);
+            }
+
+            command.Parameters.AddWithValue(
+                "$dob",
+                UpdatedUser.DateOfBirth == default
+                    ? (object)DBNull.Value
+                    : UpdatedUser.DateOfBirth
+                          .ToDateTime(TimeOnly.MinValue)
+                          .ToString("yyyy-MM-dd")
+            );
+
+            command.Parameters.AddWithValue(
+                "$email",
+                string.IsNullOrWhiteSpace(UpdatedUser.Email) ? (object)DBNull.Value : UpdatedUser.Email);
+
+            command.Parameters.AddWithValue(
+                "$phone",
+                string.IsNullOrWhiteSpace(UpdatedUser.PhoneNo) ? (object)DBNull.Value : UpdatedUser.PhoneNo);
+
+            command.Parameters.AddWithValue(
+                "$address",
+                string.IsNullOrWhiteSpace(UpdatedUser.Address) ? (object)DBNull.Value : UpdatedUser.Address);
+
+            command.Parameters.AddWithValue(
+                "$userType",
+                string.IsNullOrWhiteSpace(UpdatedUser.UserType) ? (object)DBNull.Value : UpdatedUser.UserType);
+
+            command.ExecuteNonQuery();
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id}")]
+        public ActionResult DeleteUser(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            // اول شيء نتأكد إن اليوزر موجود
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "SELECT COUNT(*) FROM User WHERE UserID = $id;";
+            checkCommand.Parameters.AddWithValue("$id", id);
+
+            long count = (long)checkCommand.ExecuteScalar();
+
+            if (count == 0)
+                return NotFound($"No user found with ID = {id}");
+
+            // نسوي أمر الحذف
+            var deleteCommand = connection.CreateCommand();
+            deleteCommand.CommandText = "DELETE FROM User WHERE UserID = $id;";
+            deleteCommand.Parameters.AddWithValue("$id", id);
+
+            deleteCommand.ExecuteNonQuery();
+
+            return NoContent(); // 204  
+        }
     }
 }
