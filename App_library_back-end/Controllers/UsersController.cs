@@ -100,7 +100,7 @@ namespace App_library_back_end.Controllers
             var command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT UserID, Name, UserName, Password, Email, DateOfBirth, Gender, PhoneNo, Address, UserType
-                FROM User
+                FROM user
                 WHERE UserID = $id;
             ";
 
@@ -113,14 +113,16 @@ namespace App_library_back_end.Controllers
                 {
                     UserID = reader.GetInt32(0),
                     Name = reader.GetString(1),
-                    Password = reader.IsDBNull(2) ? null : reader.GetString(2),
-                    DateOfBirth = reader.IsDBNull(3)
-                        ? default
-                        : DateOnly.FromDateTime(DateTime.Parse(reader.GetString(3))),
+                    UserName = reader.GetString(2),
+                    Password = reader.GetString(3),
                     Email = reader.IsDBNull(4) ? null : reader.GetString(4),
-                    PhoneNo = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    Address = reader.IsDBNull(6) ? null : reader.GetString(6),
-                    UserType = reader.IsDBNull(7) ? null : reader.GetString(7)
+                    DateOfBirth = reader.IsDBNull(5)
+                        ? default
+                        : DateOnly.FromDateTime(DateTime.Parse(reader.GetString(5))),
+                    Gender = reader.GetString(6),
+                    PhoneNo = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    Address = reader.IsDBNull(8) ? null : reader.GetString(8),
+                    UserType = reader.IsDBNull(9) ? null : reader.GetString(9)
                 };
             }
 
@@ -143,15 +145,21 @@ namespace App_library_back_end.Controllers
             // ثم نطلب آخر ID تم إدخاله (SQLite يوفّره تلقائيًا)
             command.CommandText = @"
                 INSERT INTO User (Name, UserName, Password, Email, DateOfBirth, Gender, PhoneNo, Address, UserType)
-                VALUES ($name, $UserName, $password, $email, $dob, $gender, $phone, $address, $userType);
+                VALUES ($name, $userName, $password, $email, $dob, $gender, $phone, $address, $userType);
 
                 SELECT last_insert_rowid();
             ";
 
             command.Parameters.AddWithValue("$name", newUser.Name);
 
+            command.Parameters.AddWithValue("$userName",
+                string.IsNullOrWhiteSpace(newUser.UserName) ? (object)DBNull.Value : newUser.UserName);
+
             string hashedPassword = HashPassword(newUser.Password);
             command.Parameters.AddWithValue("$password", hashedPassword);
+
+            command.Parameters.AddWithValue("$email",
+                string.IsNullOrWhiteSpace(newUser.Email) ? (object)DBNull.Value : newUser.Email);
 
             command.Parameters.AddWithValue(
                 "$dob",
@@ -162,8 +170,8 @@ namespace App_library_back_end.Controllers
                           .ToString("yyyy-MM-dd")
             );
 
-            command.Parameters.AddWithValue("$email",
-                string.IsNullOrWhiteSpace(newUser.Email) ? (object)DBNull.Value : newUser.Email);
+            command.Parameters.AddWithValue("$gender",
+                string.IsNullOrWhiteSpace(newUser.Gender) ? (object)DBNull.Value : newUser.Gender);
 
             command.Parameters.AddWithValue("$phone",
                 string.IsNullOrWhiteSpace(newUser.PhoneNo) ? (object)DBNull.Value : newUser.PhoneNo);
@@ -205,7 +213,7 @@ namespace App_library_back_end.Controllers
                 UPDATE User
                 SET
                     Name        = $name,
-                    UserName    = $UserName,
+                    UserName    = $userName,
                     Password    = $password,
                     Email       = $email,
                     DateOfBirth = $dob,
@@ -219,6 +227,9 @@ namespace App_library_back_end.Controllers
             command.Parameters.AddWithValue("$id", id);
             command.Parameters.AddWithValue("$name", UpdatedUser.Name);
 
+            command.Parameters.AddWithValue("$userName",
+                string.IsNullOrWhiteSpace(UpdatedUser.UserName) ? (object)DBNull.Value : UpdatedUser.UserName);
+
             if (string.IsNullOrWhiteSpace(UpdatedUser.Password))
             {
                 command.Parameters.AddWithValue("$password", DBNull.Value);
@@ -230,6 +241,10 @@ namespace App_library_back_end.Controllers
             }
 
             command.Parameters.AddWithValue(
+                "$email",
+                string.IsNullOrWhiteSpace(UpdatedUser.Email) ? (object)DBNull.Value : UpdatedUser.Email);
+
+            command.Parameters.AddWithValue(
                 "$dob",
                 UpdatedUser.DateOfBirth == default
                     ? (object)DBNull.Value
@@ -239,8 +254,8 @@ namespace App_library_back_end.Controllers
             );
 
             command.Parameters.AddWithValue(
-                "$email",
-                string.IsNullOrWhiteSpace(UpdatedUser.Email) ? (object)DBNull.Value : UpdatedUser.Email);
+                "$gender",
+                string.IsNullOrWhiteSpace(UpdatedUser.Gender) ? (object)DBNull.Value : UpdatedUser.Gender);
 
             command.Parameters.AddWithValue(
                 "$phone",
@@ -267,7 +282,7 @@ namespace App_library_back_end.Controllers
 
             // اول شيء نتأكد إن اليوزر موجود
             var checkCommand = connection.CreateCommand();
-            checkCommand.CommandText = "SELECT COUNT(*) FROM User WHERE UserID = $id;";
+            checkCommand.CommandText = "SELECT COUNT(*) FROM user WHERE UserID = $id;";
             checkCommand.Parameters.AddWithValue("$id", id);
 
             long count = (long)checkCommand.ExecuteScalar();
@@ -277,7 +292,7 @@ namespace App_library_back_end.Controllers
 
             // نسوي أمر الحذف
             var deleteCommand = connection.CreateCommand();
-            deleteCommand.CommandText = "DELETE FROM User WHERE UserID = $id;";
+            deleteCommand.CommandText = "DELETE FROM user WHERE UserID = $id;";
             deleteCommand.Parameters.AddWithValue("$id", id);
 
             deleteCommand.ExecuteNonQuery();
@@ -286,3 +301,4 @@ namespace App_library_back_end.Controllers
         }
     }
 }
+

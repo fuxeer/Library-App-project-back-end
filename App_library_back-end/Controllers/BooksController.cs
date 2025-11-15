@@ -26,7 +26,7 @@ namespace App_library_back_end.Controllers
             var command = connection.CreateCommand();
 
             command.CommandText = @"
-                CREATE TABLE IF NOT EXISTS Book (
+                CREATE TABLE IF NOT EXISTS book (
                     BookID INT PRIMARY KEY AUTOINCREMENT,
 	                Title VARCHAR NOT NULL,
 	                Author VARCHAR NOT NULL,
@@ -50,7 +50,7 @@ namespace App_library_back_end.Controllers
             var command = connection.CreateCommand();
             command.CommandText = @"
                 SELECT BookID, Title, Author, Description, Category, Publisher, PublishYear
-                FROM Book;
+                FROM book;
             ";
 
             using var reader = command.ExecuteReader();
