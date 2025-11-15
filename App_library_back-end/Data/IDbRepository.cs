@@ -5,12 +5,15 @@ namespace App_library_back_end.Data
 {
     public class IDbRepository
     {
-        public string ConnectionString { get; private set; } = "Data Source=library.db";
-
-        public void Initialize()
+        private readonly string _connectionString;
+        public IDbRepository(string connection) 
         {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
+            _connectionString = connection;
+        }
+        public void Initialize ()
+        {
+            using var Connection = new SqliteConnection(_connectionString);
+            Connection.Open();
 
             var command = connection.CreateCommand();
             command.CommandText = @"
