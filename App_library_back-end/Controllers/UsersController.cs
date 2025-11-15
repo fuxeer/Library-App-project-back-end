@@ -35,12 +35,12 @@ namespace App_library_back_end.Controllers
             var command = connection.CreateCommand();
             command.CommandText = @"
                 CREATE TABLE IF NOT EXISTS user (
-                    UserID INT PRIMARY KEY AUTOINCREMENT,
+                    UserID INTEGER PRIMARY KEY AUTOINCREMENT,
 	                Name VARCHAR NOT NULL,
 	                UserName VARCHAR NOT NULL UNIQUE,
 	                Password VARCHAR NOT NULL,
 	                Email VARCHAR,
-	                DateOfBirth DATE,
+	                DateOfBirth TEXT,
 	                Gender VARCHAR,
 	                PhoneNo VARCHAR,
 	                Address VARCHAR,
