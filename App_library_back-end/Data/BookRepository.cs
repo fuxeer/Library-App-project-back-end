@@ -8,15 +8,14 @@ namespace App_library_back_end.Repository
 {
     public class BookRepository
     {
-        private readonly IDbRepository _db;
+        private readonly string _connectionString;
 
-        public BookRepository()
+        public BookRepository(string connectionString)
         {
-            _db = new IDbRepository();
-            _db.Initialize(); // Ensure tables exist
+            _connectionString = connectionString;
         }
 
-        private SqliteConnection GetConnection() => new SqliteConnection(_db.ConnectionString);
+        private SqliteConnection GetConnection() => new SqliteConnection(_connectionString);
 
         public async Task<IEnumerable<Book>> GetAllBooks()
         {
@@ -33,8 +32,8 @@ namespace App_library_back_end.Repository
         public async Task<int> AddBook(Book book)
         {
             using var conn = GetConnection();
-            var sql = @"INSERT INTO book (Title, Author, Description, Category, Publisher, PublishYear)
-                        VALUES (@Title, @Author, @Description, @Category, @Publisher, @PublishYear);";
+            var sql = @"INSERT INTO book (Title, Author, Description, Category, Publisher, PublishYear, Rating)
+                VALUES (@Title, @Author, @Description, @Category, @Publisher, @PublishYear, @Rating);";
             return await conn.ExecuteAsync(sql, book);
         }
 
@@ -42,9 +41,9 @@ namespace App_library_back_end.Repository
         {
             using var conn = GetConnection();
             var sql = @"UPDATE book SET 
-                        Title=@Title, Author=@Author, Description=@Description, Category=@Category, 
-                        Publisher=@Publisher, PublishYear=@PublishYear
-                        WHERE BookID=@BookID";
+                Title=@Title, Author=@Author, Description=@Description, Category=@Category, 
+                Publisher=@Publisher, PublishYear=@PublishYear, Rating=@Rating
+                WHERE BookID=@BookID";
             return await conn.ExecuteAsync(sql, book);
         }
 

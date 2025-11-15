@@ -9,6 +9,7 @@
         public string Category { get; set; }
         public string Publisher { get; set; }
         public int PublishYear { get; set; }
+        public double Rating { get; set; }
 
     }
 }
