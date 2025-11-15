@@ -1,4 +1,4 @@
-﻿using App_library_back_end.Model;
+﻿/*using App_library_back_end.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -27,7 +27,7 @@ namespace App_library_back_end.Controllers
 
             command.CommandText = @"
                 CREATE TABLE IF NOT EXISTS book (
-                    BookID INT PRIMARY KEY AUTOINCREMENT,
+                    BookID INTEGER PRIMARY KEY AUTOINCREMENT,
 	                Title VARCHAR NOT NULL,
 	                Author VARCHAR NOT NULL,
 	                Description TEXT,
@@ -38,7 +38,7 @@ namespace App_library_back_end.Controllers
             ";
             command.ExecuteNonQuery();
         }
-        [HttpGet]
+        
         [HttpGet]
         public ActionResult<IEnumerable<Book>> GetAllBooks()
         {
@@ -73,3 +73,4 @@ namespace App_library_back_end.Controllers
 
     }
 }
+*/

@@ -4,9 +4,14 @@ namespace App_library_back_end.Data
 {
     public class IDbRepository
     {
-        public void Initialize (string connectionString)
+        private readonly string _connectionString;
+        public IDbRepository(string connection) 
         {
-            using var Connection = new SqliteConnection(connectionString);
+            _connectionString = connection;
+        }
+        public void Initialize ()
+        {
+            using var Connection = new SqliteConnection(_connectionString);
             Connection.Open();
 
             var command = Connection.CreateCommand();
