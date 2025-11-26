@@ -17,33 +17,75 @@ namespace App_library_back_end.Data
 
             var command = connection.CreateCommand();
             command.CommandText = @"
-                CREATE TABLE IF NOT EXISTS user (
-                    UserID INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Name VARCHAR NOT NULL,
-                    UserName VARCHAR NOT NULL UNIQUE,
-                    Password VARCHAR NOT NULL,
-                    Email VARCHAR,
-                    DateOfBirth TEXT,
-                    Gender VARCHAR,
-                    PhoneNo VARCHAR,
-                    Address VARCHAR,
-                    UserType CHAR
-                );
+CREATE TABLE IF NOT EXISTS user (
+    UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name VARCHAR NOT NULL,
+    UserName VARCHAR NOT NULL UNIQUE,
+    Password VARCHAR NOT NULL,
+    Email VARCHAR,
+    DateOfBirth TEXT,
+    Gender VARCHAR,
+    PhoneNo VARCHAR,
+    Address VARCHAR,
+    UserType CHAR
+);
 
-                CREATE TABLE IF NOT EXISTS book (
-                    BookID INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Title VARCHAR NOT NULL,
-                    Author VARCHAR NOT NULL,
-                    Description TEXT,
-                    Category VARCHAR,
-                    Publisher VARCHAR,
-                    PublishYear INTEGER,
-                    Rating REAL
-                );
+CREATE TABLE IF NOT EXISTS book (
+    BookID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Title VARCHAR NOT NULL,
+    Author VARCHAR NOT NULL,
+    Description TEXT,
+    Category VARCHAR,
+    Publisher VARCHAR,
+    PublishYear INTEGER,
+    Rating REAL
+);
+
+CREATE TABLE IF NOT EXISTS reserve (
+    ReserveID INTEGER PRIMARY KEY AUTOINCREMENT,
+    BorrowerID INTEGER,
+    BookID INTEGER,
+    ReserveDate TEXT,
+    ReserveTime TEXT,
+    StartDate TEXT,
+    DueDate TEXT,
+    ReserveStatus TEXT,
+    FOREIGN KEY (BorrowerID) REFERENCES user(UserID),
+    FOREIGN KEY (BookID) REFERENCES book(BookID)
+);
+
+CREATE TABLE IF NOT EXISTS copy (
+    CopyID INTEGER PRIMARY KEY AUTOINCREMENT,
+    BookID INTEGER,
+    SerialNumber TEXT,
+    CopyStatus TEXT,
+    FOREIGN KEY (BookID) REFERENCES book(BookID)
+);
+
+CREATE TABLE IF NOT EXISTS rent (
+    RentID INTEGER PRIMARY KEY AUTOINCREMENT,
+    BorrowerID INTEGER,
+    CopyID INTEGER,
+    RentDate TEXT,
+    RentTime TEXT,
+    DueDate TEXT,
+    RentStatus TEXT,
+    FOREIGN KEY (BorrowerID) REFERENCES user(UserID),
+    FOREIGN KEY (CopyID) REFERENCES copy(CopyID)
+);
+
+CREATE TABLE IF NOT EXISTS log (
+    LogID INTEGER PRIMARY KEY AUTOINCREMENT,
+    LibrarianID INTEGER,
+    LogDate TEXT,
+    LogTime TEXT,
+    LogType TEXT,
+    FOREIGN KEY (LibrarianID) REFERENCES user(UserID)
+);
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_book_title_author ON book(Title, Author);
 
-        -- Seed books safely
+        /*Seed books safely
         INSERT OR IGNORE INTO book (Title, Author, Description, Category, Publisher, PublishYear, Rating) VALUES
         ('The Silent Forest', 'Emma Johnson', 'A thrilling journey into a mysterious forest.', 'Thriller', 'Maple Press', 2015, 4.2),
         ('Ocean Whispers', 'Liam Smith', 'A story of love and discovery by the sea.', 'Romance', 'BlueWave', 2018, 3.8),
@@ -97,7 +139,9 @@ namespace App_library_back_end.Data
         ('The Quantum Enigma', 'Lucas Gray', 'Exploring mysteries of quantum physics.', 'Science', 'Nova Books', 2020, 4.7),
         ('Echoes of the Past', 'Charlotte Rivera', 'Historical fiction with secrets revealed.', 'Historical Fiction', 'Royal Press', 2015, 4.1),
         ('Moonlit Serenade', 'Benjamin Foster', 'Romance under moonlight.', 'Romance', 'Starry Ink', 2018, 4.4)
-            ";
+            */"
+
+;
             command.ExecuteNonQuery();
         }
     }

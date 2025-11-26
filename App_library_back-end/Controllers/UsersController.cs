@@ -1,5 +1,4 @@
-﻿
-using App_library_back_end.Data;
+﻿using App_library_back_end.Data;
 using App_library_back_end.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -26,42 +25,42 @@ namespace App_library_back_end.Controllers
         }
 
         [HttpGet]
-        public ActionResult<IEnumerable<User>> GetAllUsers()
+        public async Task<ActionResult<IEnumerable<User>>> GetAllUsers()
         {
-            var users = _userRepository.GetAllUser();
+            var users = await _userRepository.GetAllUser();
 
             foreach (var u in users)
-                u.Password = null;
+                u.Password = "";
 
             return Ok(users);
         }
 
         [HttpGet("{id}")]
-        public ActionResult<User> GetUserById(int id)
+        public async Task<ActionResult<User>> GetUserById(int id)
         {
-            var user = _userRepository.GetUserByID(id);
+            var user = await _userRepository.GetUserByID(id);
             if (user == null)
                 return NotFound($"No user found with ID = {id}");
 
-            user.Password = null;
+            user.Password = "";
             return Ok(user);
         }
 
         [HttpPost]
-        public ActionResult<User> CreateUser(User newUser)
+        public async Task<ActionResult<User>> CreateUser(User newUser)
         {
-            var createdUser = _userRepository.CreateUser(newUser);
-            createdUser.Password = null;
+            var createdUser = await _userRepository.CreateUser(newUser);
+            createdUser.Password = "";
 
             return CreatedAtAction(nameof(GetUserById), new { id = createdUser.UserID }, createdUser);
         }
 
         [HttpPut("{id}")]
-        public ActionResult UpdateUser(int id, User updatedUser)
+        public async Task<ActionResult> UpdateUser(int id, User updatedUser)
         {
             updatedUser.UserID = id; // Ensure ID matches route
 
-            bool updated = _userRepository.UpdateUser(id, updatedUser);
+            bool updated = await _userRepository.UpdateUser(id, updatedUser);
             if (!updated)
                 return NotFound($"No user found with ID = {id}");
 
@@ -69,9 +68,9 @@ namespace App_library_back_end.Controllers
         }
 
         [HttpDelete("{id}")]
-        public ActionResult DeleteUser(int id)
+        public async Task<ActionResult> DeleteUser(int id)
         {
-            bool deleted = _userRepository.DeleteUser(id);
+            bool deleted = await _userRepository.DeleteUser(id);
             if (!deleted)
                 return NotFound($"No user found with ID = {id}");
 
@@ -79,14 +78,14 @@ namespace App_library_back_end.Controllers
         }
 
         [HttpPost("login")]
-        public ActionResult<User> Login([FromBody] User login)
+        public async Task<ActionResult<User>> Login([FromBody] User login)
         {
-            var user = _userRepository.Login(login.UserName, login.Password);
+            var user = await _userRepository.Login(login.UserName, login.Password);
 
             if (user == null)
                 return Unauthorized("Invalid username or password");
 
-            user.Password = null;
+            user.Password = "";
             return Ok(user);
         }
     }

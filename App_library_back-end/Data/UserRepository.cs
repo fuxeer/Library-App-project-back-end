@@ -14,15 +14,15 @@ namespace App_library_back_end.Data
             _connectionString = connectionString;
         }
 
-        public IEnumerable<User> GetAllUser()
+        public async Task<IEnumerable<User>> GetAllUser()
         {
             using var connection = new SqliteConnection(_connectionString);
 
 
-           return connection.Query<User>("SELECT * FROM user");
+            return await connection.QueryAsync<User>("SELECT * FROM user");
         }
 
-        public User CreateUser(User newuser)
+        public async Task<User> CreateUser(User newuser)
         {
             using var connection = new SqliteConnection(_connectionString);
             string sql = @"
@@ -32,25 +32,25 @@ namespace App_library_back_end.Data
                 (@Name, @UserName, @Password, @Email, @DateOfBirth, @Gender, @PhoneNo, @Address, @UserType);
                 SELECT last_insert_rowid();
             ";
-            var id = connection.ExecuteScalar<long>(sql, newuser);
+            var id = await connection.ExecuteScalarAsync<long>(sql, newuser);
             newuser.UserID = (int)id;
 
             return newuser;
         }
 
-        public User? GetUserByID(int id)
+        public async Task<User?> GetUserByID(int id)
         {
             using var connection = new SqliteConnection(_connectionString);
 
-            return connection.QueryFirstOrDefault<User>(
+            return await connection.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM user WHERE UserID = @Id;",
                 new { Id = id });
         }
 
-        public bool UpdateUser(int Id , User updatedUser)
+        public async Task<bool> UpdateUser(int Id, User updatedUser)
         {
             using var connection = new SqliteConnection(_connectionString);
-            var sql  = @"
+            var sql = @"
                 UPDATE user SET
                     Name = @Name,
                     UserName = @UserName,
@@ -64,25 +64,25 @@ namespace App_library_back_end.Data
                 WHERE UserID = @UserID;
             ";
 
-            int rows = connection.Execute(sql, updatedUser);
+            int rows = await connection.ExecuteAsync(sql, updatedUser);
             return rows > 0;
         }
 
-        public bool DeleteUser(int id) 
+        public async Task<bool> DeleteUser(int id)
         {
             using var connectoin = new SqliteConnection(_connectionString);
-            int rows = connectoin.Execute("DELETE FROM user WHERE UserID = @Id;", new { Id = id });
+            int rows = await connectoin.ExecuteAsync("DELETE FROM user WHERE UserID = @Id;", new { Id = id });
 
             return rows > 0;
         }
 
-        public User? Login(string username, string password)
+        public async Task<User?> Login(string username, string password)
         {
             using var connection = new SqliteConnection(_connectionString);
 
             string sql = "SELECT * FROM user WHERE UserName = @UserName AND Password = @Password;";
 
-            return connection.QueryFirstOrDefault<User>(sql , new {UserName = username , Password = password});
+            return await connection.QueryFirstOrDefaultAsync<User>(sql, new { UserName = username, Password = password });
         }
     }
 }

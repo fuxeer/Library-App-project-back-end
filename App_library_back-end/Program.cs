@@ -1,16 +1,31 @@
+using App_library_back_end.Data;
+using App_library_back_end.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Register ReservationService for controllers
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    string conn = config.GetConnectionString("DefaultConnection");
+    return new ReservationService(conn);
+});
 
+// Register the background worker
+builder.Services.AddHostedService<RentalStatusService>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    string conn = config.GetConnectionString("DefaultConnection");
+    return new RentalStatusService(conn);
+});
+
+// Add controllers and Swagger
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -18,9 +33,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
-app.Run(); 
+app.Run();
