@@ -5,155 +5,179 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
+
 namespace App_library_back_end.Services
 {
     public class RentalStatusService : BackgroundService
     {
-
-        public readonly String _connectionString;
-
-        public RentalStatusService(String connectionString)
+        private readonly string _connectionString;
+        public RentalStatusService(string connectionString)
         {
             _connectionString = connectionString;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested) 
+            while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     using var db = new SqliteConnection(_connectionString);
                     await db.OpenAsync(stoppingToken);
 
-                    Console.WriteLine("[Worker] Checking overdue rents...");
-                    await UpdateRentToWaitingForReturn(db);
+                    Console.WriteLine("[Worker] Checking overdue active rents...");
+                    await MarkOverdueRents(db);
 
-                    Console.WriteLine("[Worker] Handling returned copies...");
-                    await HandleReturnedCopies(db);
-
-                    Console.WriteLine("[Worker] Converting reservations to rent...");
+                    Console.WriteLine("[Worker] Converting reservations that reached StartDate...");
                     await ConvertReservationsToRent(db);
 
+                    Console.WriteLine("[Worker] Processing returned copies...");
+                    await ProcessReturnedCopies(db);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.ToString());
                 }
 
-                await Task.Delay(TimeSpan.FromMinutes(1) , stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
 
-        private async Task UpdateRentToWaitingForReturn(IDbConnection db)
+        // ---------------------------------------------------------
+        // 1) Mark overdue rents as WaitingForReturn
+        // ---------------------------------------------------------
+        private async Task MarkOverdueRents(IDbConnection db)
         {
-            string sql = @"
+            await db.ExecuteAsync(@"
                 UPDATE rent
                 SET RentStatus = 'WaitingForReturn'
-                WHERE DueDate <= DATE('now')
-                AND RentStatus = 'Active';
-            ";
-            await db.ExecuteAsync(sql);
+                WHERE RentStatus = 'Active'
+                AND DueDate <= DATE('now');
+            ");
         }
 
-        // 2) Handle returned copies → assign next reservation
-        private async Task HandleReturnedCopies(IDbConnection db)
+        // ---------------------------------------------------------
+        // 2) Convert reservations → rent ONLY when StartDate has arrived
+        // ---------------------------------------------------------
+        private async Task ConvertReservationsToRent(IDbConnection db)
         {
             using var tran = db.BeginTransaction();
 
-            // Get returned rents
-            var returnedRents = await db.QueryAsync<dynamic>(@"
-                SELECT RentID, CopyID, BookID
-                FROM rent
-                WHERE RentStatus = 'Returned';
+            var pendingReservations = await db.QueryAsync<dynamic>(@"
+                SELECT ReserveID, BorrowerID, BookID, StartDate, DueDate
+                FROM reserve
+                WHERE ReserveStatus = 'PENDING'
+                AND StartDate <= DATE('now');
             ", transaction: tran);
 
-            foreach (var rent in returnedRents)
+            foreach (var res in pendingReservations)
             {
-                // Make copy available
-                await db.ExecuteAsync(
-                    "UPDATE copy SET CopyStatus = 'AVAILABLE' WHERE CopyID = @CopyID;",
-                    new { rent.CopyID }, tran
-                );
-
-                // Get earliest reservation for the book
-                var reservation = await db.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT ReserveID, BorrowerID
-                    FROM reserve
+                var copy = await db.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT CopyID
+                    FROM copy
                     WHERE BookID = @BookID
-                    AND ReserveStatus = 'PENDING'
-                    ORDER BY ReserveDate ASC, ReserveTime ASC
+                    AND CopyStatus = 'AVAILABLE'
                     LIMIT 1;
-                ", new { rent.BookID }, tran);
+                ", new { res.BookID }, tran);
 
-                if (reservation != null)
+                if (copy == null)
+                    continue;
+
+                // Mark copy as RENTED
+                await db.ExecuteAsync(@"
+                    UPDATE copy
+                    SET CopyStatus = 'RENTED'
+                    WHERE CopyID = @CopyID;
+                ", new { copy.CopyID }, tran);
+
+                // Create rent using the user's DueDate
+                await db.ExecuteAsync(@"
+                    INSERT INTO rent (BorrowerID, CopyID, ReserveID, RentDate, RentTime, DueDate, RentStatus)
+                    VALUES (@BorrowerID, @CopyID, @ReserveID, DATE('now'), TIME('now'), @DueDate, 'WaitingForPickup');
+                ", new
                 {
-                    // Assign rent (WaitingForPickup)
-                    await db.ExecuteAsync(@"
-                        INSERT INTO rent (BorrowerID, CopyID, RentDate, RentTime, DueDate, RentStatus)
-                        VALUES (@BorrowerID, @CopyID, DATE('now'), TIME('now'), DATE('now', '+14 day'), 'WaitingForPickup');
-                    ", new { BorrowerID = reservation.BorrowerID, CopyID = rent.CopyID }, tran);
+                    BorrowerID = res.BorrowerID,
+                    CopyID = copy.CopyID,
+                    ReserveID = res.ReserveID,
+                    DueDate = res.DueDate
+                }, tran);
 
-                    // Mark reservation as Completed
-                    await db.ExecuteAsync(
-                        "UPDATE reserve SET ReserveStatus = 'COMPLETED' WHERE ReserveID = @ReserveID;",
-                        new { reservation.ReserveID }, tran
-                    );
-                }
-
-                // Mark old rent fully processed
-                await db.ExecuteAsync(
-                    "UPDATE rent SET RentStatus = 'Completed' WHERE RentID = @RentID;",
-                    new { rent.RentID }, tran
-                );
+                // Mark reservation done
+                await db.ExecuteAsync(@"
+                    UPDATE reserve
+                    SET ReserveStatus = 'COMPLETED'
+                    WHERE ReserveID = @ReserveID;
+                ", new { res.ReserveID }, tran);
             }
 
             tran.Commit();
         }
 
-        // 3) Convert reservations → rents when copies are available
-        private async Task ConvertReservationsToRent(IDbConnection db)
+        // ---------------------------------------------------------
+        // 3) Process returned copies → assign next reservation
+        // ---------------------------------------------------------
+        private async Task ProcessReturnedCopies(IDbConnection db)
         {
             using var tran = db.BeginTransaction();
 
-            // Get all available copies
-            var availableCopies = await db.QueryAsync<dynamic>(@"
-                SELECT CopyID, BookID
-                FROM copy
-                WHERE CopyStatus = 'AVAILABLE';
+            var returned = await db.QueryAsync<dynamic>(@"
+                SELECT RentID, CopyID, ReserveID
+                FROM rent
+                WHERE RentStatus = 'Returned';
             ", transaction: tran);
 
-            foreach (var copy in availableCopies)
+            foreach (var rent in returned)
             {
-                // Get earliest reservation for this book
-                var reservation = await db.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT ReserveID, BorrowerID
+                // Make copy available temporarily
+                await db.ExecuteAsync(@"
+                    UPDATE copy
+                    SET CopyStatus = 'AVAILABLE'
+                    WHERE CopyID = @CopyID;
+                ", new { rent.CopyID }, tran);
+
+                // Find next reservation for same book
+                var res = await db.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT ReserveID, BorrowerID, DueDate
                     FROM reserve
-                    WHERE BookID = @BookID
+                    WHERE BookID = (SELECT BookID FROM copy WHERE CopyID = @CopyID)
                     AND ReserveStatus = 'PENDING'
                     ORDER BY ReserveDate ASC, ReserveTime ASC
                     LIMIT 1;
-                ", new { copy.BookID }, tran);
+                ", new { rent.CopyID }, tran);
 
-                if (reservation == null) continue;
+                if (res != null)
+                {
+                    // Copy becomes RENTED
+                    await db.ExecuteAsync(@"
+                        UPDATE copy SET CopyStatus = 'RENTED' WHERE CopyID = @CopyID;
+                    ", new { rent.CopyID }, tran);
 
-                // Mark copy as reserved
-                await db.ExecuteAsync(
-                    "UPDATE copy SET CopyStatus = 'RENTED' WHERE CopyID = @CopyID;",
-                    new { copy.CopyID }, tran
-                );
+                    // Create next rent
+                    await db.ExecuteAsync(@"
+                        INSERT INTO rent (BorrowerID, CopyID, ReserveID, RentDate, RentTime, DueDate, RentStatus)
+                        VALUES (@BorrowerID, @CopyID, @ReserveID, DATE('now'), TIME('now'), @DueDate, 'WaitingForPickup');
+                    ", new
+                    {
+                        BorrowerID = res.BorrowerID,
+                        CopyID = rent.CopyID,
+                        ReserveID = res.ReserveID,
+                        DueDate = res.DueDate
+                    }, tran);
 
-                // Create rent (WaitingForPickup)
+                    // Mark reservation done
+                    await db.ExecuteAsync(@"
+                        UPDATE reserve
+                        SET ReserveStatus = 'COMPLETED'
+                        WHERE ReserveID = @ReserveID;
+                    ", new { res.ReserveID }, tran);
+                }
+
+                // Close old rent
                 await db.ExecuteAsync(@"
-                    INSERT INTO rent (BorrowerID, CopyID, RentDate, RentTime, DueDate, RentStatus)
-                    VALUES (@BorrowerID, @CopyID, DATE('now'), TIME('now'), DATE('now', '+14 day'), 'WaitingForPickup');
-                ", new { BorrowerID = reservation.BorrowerID, CopyID = copy.CopyID }, tran);
-
-                // Mark reservation completed
-                await db.ExecuteAsync(
-                    "UPDATE reserve SET ReserveStatus = 'COMPLETED' WHERE ReserveID = @ReserveID;",
-                    new { reservation.ReserveID }, tran
-                );
+                    UPDATE rent
+                    SET RentStatus = 'Completed'
+                    WHERE RentID = @RentID;
+                ", new { rent.RentID }, tran);
             }
 
             tran.Commit();

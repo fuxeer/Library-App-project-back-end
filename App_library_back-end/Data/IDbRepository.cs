@@ -66,12 +66,14 @@ CREATE TABLE IF NOT EXISTS rent (
     RentID INTEGER PRIMARY KEY AUTOINCREMENT,
     BorrowerID INTEGER,
     CopyID INTEGER,
+    ReserveID INTEGER,
     RentDate TEXT,
     RentTime TEXT,
     DueDate TEXT,
     RentStatus TEXT,
     FOREIGN KEY (BorrowerID) REFERENCES user(UserID),
-    FOREIGN KEY (CopyID) REFERENCES copy(CopyID)
+    FOREIGN KEY (CopyID) REFERENCES copy(CopyID),
+    FOREIGN KEY (ReserveID) REFERENCES reserve(ReserveID)
 );
 
 CREATE TABLE IF NOT EXISTS log (
