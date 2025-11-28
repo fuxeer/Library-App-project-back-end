@@ -22,7 +22,7 @@ namespace App_library_back_end.Data
         SELECT COUNT(*) 
         FROM copy 
         WHERE BookID = @BookID 
-        AND CopyStatus = 'AVAILABLE'
+        
     ", new { BookID = bookId });
 
             if (totalCopies == 0) return false;
