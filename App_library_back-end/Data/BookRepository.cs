@@ -52,5 +52,20 @@ namespace App_library_back_end.Repository
             using var conn = GetConnection();
             return await conn.ExecuteAsync("DELETE FROM book WHERE BookID=@id", new { id });
         }
+
+        public async Task<IEnumerable <Copy>> GetBookCopiesByID(int id)
+        {
+            using var conn = GetConnection();
+            return await conn.QueryAsync<Copy>("SELECT * FROM copy WHERE BookID=@bookID" , new { bookID = id });
+        }
+
+        public async Task<bool> ChangeCopyStatus(int id , string status)
+        {
+            using var conn = GetConnection();
+            int row = await conn.ExecuteAsync("UPDATE copy SET CopyStatus = @status WHERE CopyID = @id ", new {status , id} );
+            return row > 0;
+        }
+
+        
     }
 }
