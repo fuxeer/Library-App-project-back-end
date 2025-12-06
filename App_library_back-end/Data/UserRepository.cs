@@ -84,5 +84,32 @@ namespace App_library_back_end.Data
 
             return await connection.QueryFirstOrDefaultAsync<User>(sql, new { UserName = username, Password = password });
         }
+        public async Task<bool> UpdateUserPartial(int userId, string? name, string? email, string? phoneNo, string? address)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+
+            string sql = @"
+        UPDATE user SET
+            Name = COALESCE(@Name, Name),
+            Email = COALESCE(@Email, Email),
+            PhoneNo = COALESCE(@PhoneNo, PhoneNo),
+            Address = COALESCE(@Address, Address)
+        WHERE UserID = @UserID;
+    ";
+
+            int rows = await connection.ExecuteAsync(sql, new
+            {
+                UserID = userId,
+                Name = name,
+                Email = email,
+                PhoneNo = phoneNo,
+                Address = address
+            });
+
+            return rows > 0;
+        }
+
     }
+
+
 }

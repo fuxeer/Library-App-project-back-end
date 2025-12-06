@@ -88,5 +88,15 @@ namespace App_library_back_end.Controllers
             user.Password = "";
             return Ok(user);
         }
+
+        [HttpPatch("update-partial")]
+        public async Task<ActionResult> UpdateUserPartial([FromBody] PartialUserUpdate dto)
+        {
+            bool updated = await _userRepository.UpdateUserPartial(dto.UserID, dto.Name, dto.Email, dto.PhoneNo, dto.Address);
+            if (!updated)
+                return NotFound($"No user found with ID = {dto.UserID}");
+
+            return NoContent();
+        }
     }
 }

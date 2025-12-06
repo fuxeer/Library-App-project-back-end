@@ -150,5 +150,64 @@ namespace App_library_back_end.Data
 
             return availableRanges;
         }
+
+        public object GetUserReservations(int userId)
+        {
+            using var db = new SqliteConnection(_ConnectionString);
+            db.Open();
+
+            var today = DateTime.Today;
+
+            // Fetch all reservations for this user
+            var reservations = db.Query<dynamic>(@"
+        SELECT 
+            rs.ReserveID,
+            rs.BookID,
+            b.Title AS BookTitle,
+            rs.StartDate,
+            rs.DueDate,
+            rs.ReserveStatus AS Status
+        FROM reserve rs
+        JOIN book b ON b.BookID = rs.BookID
+        WHERE rs.BorrowerID = @UserID
+        ORDER BY rs.StartDate ASC
+    ", new { UserID = userId }).ToList();
+
+            // Fetch rent history
+            var rents = db.Query<dynamic>(@"
+        SELECT 
+            r.RentID,
+            r.BorrowerID AS UserID,
+            c.BookID,
+            b.Title AS BookTitle,
+            r.RentDate,
+            r.DueDate AS ReturnDate,  -- use DueDate as return/expected return
+            r.RentStatus
+        FROM rent r
+        JOIN copy c ON c.CopyID = r.CopyID
+        JOIN book b ON b.BookID = c.BookID
+        WHERE r.BorrowerID = @UserID
+        ORDER BY r.RentDate DESC
+    ", new { UserID = userId }).ToList();
+
+            return new
+            {
+                current = reservations
+                    .Where(r =>
+                        DateTime.Parse(r.StartDate) <= today &&
+                        DateTime.Parse(r.DueDate) >= today),
+
+                upcoming = reservations
+                    .Where(r =>
+                        DateTime.Parse(r.StartDate) > today),
+
+                past = reservations
+                    .Where(r =>
+                        DateTime.Parse(r.DueDate) < today),
+
+                rentHistory = rents
+            };
+        }
+
     }
 }

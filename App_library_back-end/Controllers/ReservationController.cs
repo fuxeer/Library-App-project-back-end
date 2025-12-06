@@ -36,6 +36,21 @@ namespace App_library_back_end.Controllers
             }
         }
 
+        [HttpGet("{userId}/history")]
+        public IActionResult GetUserReservations(int userId)
+        {
+            try
+            {
+                var result = _reservationService.GetUserReservations(userId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+
         [HttpPost("add")]
         public IActionResult AddReservation([FromBody] ReservationRequest request)
         {
