@@ -25,13 +25,17 @@ namespace App_library_back_end.Services
                 {
                     using var db = new SqliteConnection(_connectionString);
                     await db.OpenAsync(stoppingToken);
+                    Console.WriteLine($"[{DateTime.Now}] Checking rental statuses...");
 
                     await MarkOverdueRents(db);
                     await MoveReservationsToWaitingForPickup(db);
                     await ProcessReturnedCopies(db);
+
+                    Console.WriteLine($"[{DateTime.Now}] Status update completed.\n");
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine("Error in RentalStatusService:");
                     Console.WriteLine(ex);
                 }
 
